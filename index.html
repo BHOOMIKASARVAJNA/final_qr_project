@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI QR Tampering Detector</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin-bottom: 30px;
+        }
+
+        .upload-area {
+            border: 2px dashed rgba(255,255,255,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .upload-area:hover {
+            border-color: #00c6ff;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            cursor: pointer;
+            color: white;
+        }
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            color: white;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            width: 100%;
+        }
+
+        button:hover { opacity: 0.85; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .result {
+            margin-top: 25px;
+            text-align: left;
+            background: rgba(0,0,0,0.35);
+            padding: 18px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result.show { display: block; }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.92rem;
+        }
+
+        .result-row:last-child { border-bottom: none; }
+        .label { opacity: 0.7; }
+
+        .safe    { color: #00ff99; font-weight: bold; }
+        .warning { color: #ffd700; font-weight: bold; }
+        .danger  { color: #ff4c4c; font-weight: bold; }
+
+        .risk-bar-wrap {
+            background: rgba(255,255,255,0.15);
+            border-radius: 20px;
+            height: 10px;
+            width: 100%;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .risk-bar {
+            height: 100%;
+            border-radius: 20px;
+            transition: width 0.6s ease;
+        }
+
+        .reasons-list {
+            font-size: 0.82rem;
+            opacity: 0.8;
+            margin-top: 4px;
+            line-height: 1.6;
+        }
+
+        .loader {
+            display: none;
+            margin: 15px auto 0;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255,255,255,0.2);
+            border-top-color: #00c6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1> AI QR Tampering Detector</h1>
+    <p class="subtitle">Upload a QR code to check for tampering &amp; verify UPI merchant</p>
+
+    <div class="upload-area">
+        <input type="file" id="qrFile" accept=".png,.jpg,.jpeg">
+    </div>
+
+    <button id="analyzeBtn" onclick="analyzeQR()">Analyze QR Code</button>
+    <div class="loader" id="loader"></div>
+
+    <div class="result" id="result">
+        <div class="result-row">
+            <span class="label">Status</span>
+            <span id="r-status"></span>
+        </div>
+        <div class="result-row">
+            <div style="width:100%">
+                <div style="display:flex;justify-content:space-between">
+                    <span class="label">Risk Score</span>
+                    <span id="r-risk"></span>
+                </div>
+                <div class="risk-bar-wrap" style="margin-top:6px">
+                    <div class="risk-bar" id="r-bar"></div>
+                </div>
+            </div>
+        </div>
+        <div class="result-row">
+            <span class="label">Tampering Probability</span>
+            <span id="r-prob"></span>
+        </div>
+        <div class="result-row">
+            <span class="label">Extracted UPI</span>
+            <span id="r-upi" style="font-size:0.85rem;word-break:break-all;text-align:right;max-width:60%"></span>
+        </div>
+        <div class="result-row">
+            <span class="label">Merchant</span>
+            <span id="r-merchant"></span>
+        </div>
+        <div class="result-row" id="r-reasons-row" style="flex-direction:column;align-items:flex-start;">
+            <span class="label">Analysis Notes</span>
+            <div class="reasons-list" id="r-reasons"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function analyzeQR() {
+    const fileInput = document.getElementById("qrFile");
+    const resultDiv = document.getElementById("result");
+    const btn       = document.getElementById("analyzeBtn");
+    const loader    = document.getElementById("loader");
+
+    if (!fileInput.files.length) {
+        alert("Please select a QR code image first.");
+        return;
+    }
+
+    btn.disabled = true;
+    loader.style.display = "block";
+    resultDiv.classList.remove("show");
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    try {
+        const response = await fetch("/analyze-qr", { method: "POST", body: formData });
+        const data = await response.json();
+
+        const risk = data.risk_score;
+        let cls = "safe", barColor = "#00ff99";
+        if (risk >= 55) { cls = "danger";  barColor = "#ff4c4c"; }
+        else if (risk >= 25) { cls = "warning"; barColor = "#ffd700"; }
+
+        document.getElementById("r-status").innerHTML  = `<span class="${cls}">${data.status}</span>`;
+        document.getElementById("r-risk").textContent  = `${risk}%`;
+        document.getElementById("r-prob").textContent  = `${(data.tampering_probability * 100).toFixed(1)}%`;
+        document.getElementById("r-upi").textContent   = data.extracted_upi || "Not detected";
+        document.getElementById("r-merchant").innerHTML = data.upi_verified
+            ? `<span class="safe"> ${data.merchant_name}</span>`
+            : `<span class="danger"> Unverified</span>`;
+
+        const bar = document.getElementById("r-bar");
+        bar.style.width = "0%";
+        bar.style.background = barColor;
+        setTimeout(() => { bar.style.width = risk + "%"; }, 50);
+
+        const reasons = data.reasons.length ? data.reasons.join("<br>• ") : "No anomalies detected.";
+        document.getElementById("r-reasons").innerHTML = data.reasons.length ? "• " + reasons : reasons;
+
+        resultDiv.classList.add("show");
+    } catch (err) {
+        alert("Error: " + err.message);
+    } finally {
+        btn.disabled = false;
+        loader.style.display = "none";
+    }
+}
+</script>
+
+</body>
+</html>
