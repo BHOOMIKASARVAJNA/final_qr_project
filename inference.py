@@ -232,11 +232,11 @@ async def analyze_qr(file) -> dict:
 
         # ── 6. Verdict ──
         if risk < 25:
-            result["status"] = "✅ Safe QR Code"
+            result["status"] = " Safe QR Code"
         elif risk < 55:
-            result["status"] = "⚠️ Suspicious QR Code"
+            result["status"] = " Suspicious QR Code"
         else:
-            result["status"] = "🚨 High Risk — Likely Tampered"
+            result["status"] = " High Risk — Likely Tampered"
 
         # ── 7. Reasons ──
         if ela >= 0.5:
